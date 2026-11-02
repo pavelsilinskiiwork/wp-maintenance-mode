@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Pavel Silinskii Maintenance Mode
  * Plugin URI:        https://github.com/pavelsilinskiiwork/wp-maintenance-mode
- * Description:       Lightweight maintenance mode for WordPress. Shows a customizable maintenance page with a proper 503 status and Retry-After header, an optional countdown, and bypass by role, IP address or secret link.
+ * Description:       Maintenance mode built for deployments. Toggle it from WP-CLI in your deploy script with a safety timeout; visitors get a branded page with 503 + Retry-After while admins and bypass-link holders keep using the site.
  * Version:           1.0.0
  * Requires at least: 5.9
  * Requires PHP:      8.0
@@ -39,6 +39,11 @@ function activate() {
 	add_option( Settings::OPTION, array_merge( Settings::DEFAULTS, array( 'bypass_key' => Settings::generate_key() ) ) );
 }
 register_activation_hook( __FILE__, __NAMESPACE__ . '\\activate' );
+
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	require_once PSMM_PLUGIN_DIR . 'includes/class-psmm-cli.php';
+	\WP_CLI::add_command( 'psmm', Cli::class );
+}
 
 add_action(
 	'plugins_loaded',

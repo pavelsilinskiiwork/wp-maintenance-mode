@@ -132,6 +132,12 @@ class Admin {
 
 		$bypass_key = isset( $input['bypass_key'] ) ? preg_replace( '/[^A-Za-z0-9]/', '', (string) $input['bypass_key'] ) : '';
 
+		// Set by WP-CLI only: kept while still pending and the mode stays on, otherwise cleared.
+		$expires_at = absint( Settings::get()['expires_at'] );
+		if ( empty( $input['enabled'] ) || $expires_at <= time() ) {
+			$expires_at = 0;
+		}
+
 		return array(
 			'enabled'          => ! empty( $input['enabled'] ),
 			'title'            => isset( $input['title'] ) ? sanitize_text_field( $input['title'] ) : $defaults['title'],
@@ -146,6 +152,7 @@ class Admin {
 			'bypass_roles'     => array_values( array_intersect( $roles, array_keys( wp_roles()->roles ) ) ),
 			'ip_whitelist'     => array_values( array_unique( $ips ) ),
 			'bypass_key'       => '' !== $bypass_key ? $bypass_key : Settings::generate_key(),
+			'expires_at'       => $expires_at,
 		);
 	}
 
@@ -194,6 +201,21 @@ class Admin {
 	public function render_enabled_field() {
 		$this->render_checkbox( 'enabled', __( 'Enable maintenance mode', 'pavel-silinskii-maintenance-mode' ) );
 		echo '<p class="description">' . esc_html__( 'Visitors get the maintenance page with HTTP status 503 Service Unavailable.', 'pavel-silinskii-maintenance-mode' ) . '</p>';
+
+		$settings = $this->get_settings();
+		$expires  = absint( $settings['expires_at'] );
+
+		if ( $settings['enabled'] && $expires ) {
+			$message = $expires > time()
+				/* translators: %s: date and time */
+				? __( 'Enabled from WP-CLI. Turns off automatically at %s.', 'pavel-silinskii-maintenance-mode' )
+				/* translators: %s: date and time */
+				: __( 'The WP-CLI timeout ended at %s — maintenance mode is off. Save to enable it again without a timeout.', 'pavel-silinskii-maintenance-mode' );
+
+			echo '<p class="description psmm-cli-note">' . esc_html( sprintf( $message, wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $expires ) ) ) . '</p>';
+		}
+
+		echo '<p class="description">' . wp_kses( __( 'In deploy scripts: <code>wp psmm on --for=15m</code> … <code>wp psmm off</code>', 'pavel-silinskii-maintenance-mode' ), array( 'code' => array() ) ) . '</p>';
 	}
 
 	/**

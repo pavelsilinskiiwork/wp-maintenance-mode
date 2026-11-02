@@ -43,6 +43,7 @@ class Settings {
 		'bypass_roles'     => array(),
 		'ip_whitelist'     => array(),
 		'bypass_key'       => '',
+		'expires_at'       => 0,
 	);
 
 	/**
@@ -66,7 +67,14 @@ class Settings {
 			return false;
 		}
 
-		$end = self::end_timestamp( $settings );
+		// Hard timeout set by `wp psmm on --for=...`: a failed deploy never leaves the site down.
+		// While it is set, it alone decides, overriding the scheduled end.
+		$expires = absint( $settings['expires_at'] );
+		if ( $expires ) {
+			return $expires > time();
+		}
+
+		$end = self::scheduled_end( $settings );
 
 		// Scheduled end has passed: the site goes live on its own.
 		if ( $settings['auto_disable'] && $end && $end <= time() ) {
@@ -77,12 +85,36 @@ class Settings {
 	}
 
 	/**
+	 * When maintenance is expected to end: the WP-CLI timeout if set, otherwise the scheduled end.
+	 *
+	 * @param array<string, mixed> $settings Plugin settings.
+	 * @return int|null Unix timestamp, or null when no end is known.
+	 */
+	public static function end_timestamp( array $settings ): ?int {
+		$expires = absint( $settings['expires_at'] );
+
+		return $expires ? $expires : self::scheduled_end( $settings );
+	}
+
+	/**
+	 * Merge changes into the stored settings.
+	 *
+	 * Bypasses the admin sanitize callback, so callers must pass validated values.
+	 *
+	 * @param array<string, mixed> $changes Keys to update.
+	 * @return void
+	 */
+	public static function update( array $changes ) {
+		update_option( self::OPTION, array_merge( self::get(), $changes ) );
+	}
+
+	/**
 	 * Convert the stored end date (site timezone) to a Unix timestamp.
 	 *
 	 * @param array<string, mixed> $settings Plugin settings.
 	 * @return int|null Null when no valid end date is set.
 	 */
-	public static function end_timestamp( array $settings ): ?int {
+	public static function scheduled_end( array $settings ): ?int {
 		if ( empty( $settings['end_datetime'] ) ) {
 			return null;
 		}

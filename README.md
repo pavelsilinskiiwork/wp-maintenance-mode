@@ -5,12 +5,19 @@
 ![License](https://img.shields.io/badge/License-GPL%20v2-green)
 ![Version](https://img.shields.io/badge/Version-1.0.0-blue)
 
-Lightweight maintenance mode for WordPress. Serves a customizable maintenance page with **HTTP 503 + Retry-After**, an optional countdown, and access by role, IP address or secret link. No external scripts, no tracking.
+Maintenance mode for WordPress deploy scripts and CI/CD pipelines. Toggle it from **WP-CLI with a safety timeout**: visitors get a branded page with **HTTP 503 + Retry-After**, while administrators, chosen roles, whitelisted IPs and bypass-link holders keep using the site. No external scripts, no tracking.
+
+```bash
+wp psmm on --for=15m        # if the deploy dies, the site comes back by itself in 15 minutes
+git pull && composer install --no-dev && wp core update-db
+wp psmm off
+```
 
 ---
 
 ## Table of Contents
 
+- [WP-CLI](#wp-cli)
 - [Features](#features)
 - [How It Works](#how-it-works)
 - [Installation](#installation)
@@ -25,8 +32,46 @@ Lightweight maintenance mode for WordPress. Serves a customizable maintenance pa
 
 ---
 
+## WP-CLI
+
+| Command | Description |
+| --- | --- |
+| `wp psmm on [--for=<duration>]` | Enable. With `--for`, turn off automatically after `90s`, `15m`, `2h`, `1h30m` (a plain number = minutes) |
+| `wp psmm off` | Disable and clear any timeout |
+| `wp psmm status [--format=table\|json\|yaml]` | Active state, end time, auto-off, bypass link |
+| `wp psmm is-active` | Exit code `0` when visitors see the maintenance page, `1` otherwise |
+
+While a `--for` timeout is set, it alone decides when the mode ends (it overrides the scheduled end from the settings page) and it drives the countdown and `Retry-After`. Saving the settings page keeps a pending timeout; turning the mode off there clears it.
+
+### Compared to core `wp maintenance-mode`
+
+| | Core (`.maintenance` file) | This plugin |
+| --- | --- | --- |
+| Who is locked out | Everyone, administrators included | Visitors only — admins, roles, IPs and bypass links get through |
+| Page | Plain "Briefly unavailable" text | Branded page with countdown, or your theme template |
+| Timeout | Fixed 10 minutes | Per deploy: `--for=90s` … `--for=2h` |
+| `Retry-After` | Fixed | Seconds until the timeout ends |
+| REST API, AJAX, cron | Blocked | Keep working |
+
+### GitHub Actions example
+
+```yaml
+- name: Deploy
+  run: |
+    ssh deploy@example.com '
+      cd /var/www/site &&
+      wp psmm on --for=15m &&
+      git pull --ff-only &&
+      composer install --no-dev --optimize-autoloader &&
+      wp core update-db &&
+      wp cache flush &&
+      wp psmm off
+    '
+```
+
 ## Features
 
+- **Deploy-ready** — WP-CLI commands with a safety timeout and a scriptable `is-active` exit code
 - **SEO-safe** — `503 Service Unavailable` with a `Retry-After` header
 - **Countdown** — optional expected end date with a live timer
 - **Auto-disable** — the site goes live by itself at the expected end
@@ -82,6 +127,7 @@ All settings are stored in a single option, `psmm_settings`.
 | `bypass_roles`     | string[] | `[]`                     | Roles that see the live site                               |
 | `ip_whitelist`     | string[] | `[]`                     | IPv4/IPv6 addresses that see the live site                 |
 | `bypass_key`       | string   | random, 20 chars         | Secret for the bypass link                                 |
+| `expires_at`       | int      | `0`                      | Unix time set by `wp psmm on --for`; `0` = no timeout      |
 
 ## Access Rules
 
@@ -139,7 +185,8 @@ pavel-silinskii-maintenance-mode/
 ├── includes/
 │   ├── class-psmm-settings.php            # Settings: defaults, is_active(), end time
 │   ├── class-psmm-frontend.php            # Frontend: access rules, 503 page
-│   └── class-psmm-admin-bar.php           # AdminBar: "Maintenance Mode: ON"
+│   ├── class-psmm-admin-bar.php           # AdminBar: "Maintenance Mode: ON"
+│   └── class-psmm-cli.php                 # Cli: wp psmm on/off/status/is-active
 ├── admin/
 │   └── class-psmm-admin.php               # Admin: Settings → Maintenance Mode
 ├── templates/

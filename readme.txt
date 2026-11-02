@@ -1,6 +1,6 @@
 === Pavel Silinskii Maintenance Mode ===
 Contributors: pavelsilinskii
-Tags: maintenance mode, coming soon, under construction, 503, maintenance
+Tags: maintenance mode, wp-cli, deployment, 503, maintenance
 Requires at least: 5.9
 Tested up to: 7.1
 Requires PHP: 8.0
@@ -8,25 +8,40 @@ Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Lightweight maintenance mode with a proper 503 status and Retry-After header. SEO-safe, no external scripts, no tracking.
+Maintenance mode for deploy scripts: toggle it from WP-CLI with a safety timeout. Branded 503 page, admins keep working.
 
 == Description ==
 
-Pavel Silinskii Maintenance Mode shows visitors a clean maintenance page while you work on your site, and tells search engines the downtime is temporary.
+Pavel Silinskii Maintenance Mode is built for developers and agencies who deploy WordPress sites from scripts and CI/CD pipelines.
 
-Features:
+Wrap your deploy in two commands:
 
-* HTTP 503 Service Unavailable + Retry-After header — search engines keep your rankings
-* Optional expected end date with a live countdown
-* Auto-disable: the site goes live by itself when the countdown ends
+`wp psmm on --for=15m`
+`# git pull, composer install, wp core update-db ...`
+`wp psmm off`
+
+If the deploy script fails halfway, the site comes back by itself when the timeout ends — no more sites left in maintenance overnight.
+
+Why not core `wp maintenance-mode`? Core's mode locks out everyone, administrators included, shows a plain "Briefly unavailable" message, and has a fixed 10-minute window. This plugin:
+
+* Serves a branded page with HTTP 503 and a Retry-After header matching your timeout
+* Keeps the site available to administrators, chosen roles, whitelisted IPs and bypass-link holders, so you can check the deploy before visitors do
+* Lets you choose the timeout per deploy: 90s, 15m, 2h, 1h30m
+* Never blocks wp-admin, login, the REST API, AJAX, cron or WP-CLI itself
+
+WP-CLI commands:
+
+* `wp psmm on [--for=<duration>]` — enable, optionally with an automatic timeout
+* `wp psmm off` — disable
+* `wp psmm status [--format=table|json|yaml]` — state, end time and bypass link
+* `wp psmm is-active` — exit code 0 when active, 1 otherwise, for use in scripts
+
+Also works without the command line, from Settings → Maintenance Mode:
+
+* Expected end date with a live countdown and optional auto-disable
 * Customizable title, message, logo, background and text colors
-* Administrators always see the live site
-* Access for selected user roles
-* IP whitelist
 * Secret bypass link for clients and testers (valid for 7 days, revocable)
-* Preview button for the maintenance page
-* Red "Maintenance Mode: ON" indicator in the admin bar
-* wp-admin, login, REST API, AJAX and cron keep working
+* Preview button and a red "Maintenance Mode: ON" admin bar indicator
 * Theme override via psmm-maintenance.php
 * No external scripts — no CDN, no tracking
 
@@ -34,9 +49,14 @@ Features:
 
 1. Upload plugin files to /wp-content/plugins/pavel-silinskii-maintenance-mode/
 2. Activate through the Plugins screen.
-3. Go to Settings → Maintenance Mode, configure the page and enable maintenance mode.
+3. Go to Settings → Maintenance Mode to customize the page.
+4. Enable maintenance mode there, or run `wp psmm on --for=15m` from your deploy script.
 
 == Frequently Asked Questions ==
+
+= What happens if my deploy script fails before `wp psmm off`? =
+
+With `--for`, maintenance mode turns off by itself when the timeout ends. Without it, the mode stays on until you turn it off.
 
 = Will maintenance mode hurt my SEO? =
 
@@ -52,7 +72,7 @@ A page cache (plugin, server or CDN) may be serving cached pages. Purge the cach
 
 = How do I give a client access without an account? =
 
-Copy the secret bypass link from the Access section. Clear the key and save to revoke all shared links.
+Copy the secret bypass link from the Access section, or run `wp psmm status`. Clear the key and save to revoke all shared links.
 
 = Can I use my own template? =
 
